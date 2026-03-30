@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { useApp } from "@/context/AppContext";
@@ -9,14 +9,13 @@ import Waveform from "@/components/Waveform";
 import type { ScrumSession, Template } from "@/lib/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Status = "idle" | "connecting" | "connected" | "stopping" | "saving" | "transcribing" | "error";
+type Status = "idle" | "connecting" | "connected" | "stopping" | "transcribing" | "error";
 
 const STATUS_LABEL: Record<Status, string> = {
   idle: "IDLE",
   connecting: "CONNECTING",
   connected: "LIVE",
   stopping: "STOPPING",
-  saving: "SAVING",
   transcribing: "TRANSCRIBING",
   error: "ERROR",
 };
@@ -26,7 +25,6 @@ const STATUS_COLOR: Record<Status, string> = {
   connecting:  "bg-[var(--t-warning)]",
   connected:   "bg-[var(--t-success)]",
   stopping:    "bg-[var(--t-warning)]",
-  saving:      "bg-[var(--t-accent)]",
   transcribing:"bg-[var(--t-accent)]",
   error:       "bg-[var(--t-error)]",
 };
@@ -60,8 +58,9 @@ declare global {
 }
 
 export default function DashboardPage() {
-  const supabase = createClient();
-  const { activeCompany, templates } = useApp();
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+  const { activeCompany, templates, loading } = useApp();
 
   // ── Transcription state ──
   const [status, setStatus] = useState<Status>("idle");
@@ -77,11 +76,23 @@ export default function DashboardPage() {
   const [generateError, setGenerateError] = useState("");
   const [sessionSaved, setSessionSaved] = useState(false);
 
+  // ── Transition for low-priority updates ──
+  const [, startTransition] = useTransition();
+
+  // ── Pending audio blob (held in memory until user saves) ──
+  const [pendingAudioBlob, setPendingAudioBlob] = useState<Blob | null>(null);
+  const [saving, setSaving] = useState(false);
+
   // ── Refs ──
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const interimThrottleRef = useRef<number>(0);
+  const transcriptRef = useRef(transcript);
+
+  // Keep transcript ref in sync for use in callbacks
+  useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
 
   // Auto-select first template when templates load
   useEffect(() => {
@@ -117,17 +128,25 @@ export default function DashboardPage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let final = "";
-      let interim = "";
+      let interimText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           final += result[0].transcript + " ";
         } else {
-          interim += result[0].transcript;
+          interimText += result[0].transcript;
         }
       }
-      if (final) setTranscript((prev) => prev + final);
-      setInterim(interim);
+      if (final) {
+        transcriptRef.current += final;
+        setTranscript((prev) => prev + final);
+      }
+      // Throttle interim updates to max once per 150ms to avoid excessive re-renders
+      const now = Date.now();
+      if (now - interimThrottleRef.current > 150) {
+        interimThrottleRef.current = now;
+        startTransition(() => setInterim(interimText));
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -155,6 +174,7 @@ export default function DashboardPage() {
     setStatus("connecting");
     setErrorMsg("");
     setTranscript("");
+    transcriptRef.current = "";
     setInterim("");
     setCurrentSession(null);
     setGeneratedDoc("");
@@ -188,7 +208,7 @@ export default function DashboardPage() {
     }
   }, [activeCompany, startRecognition]);
 
-  // ── Stop Recording ───────────────────────────────────────────────────────
+  // ── Stop Recording (captures audio + transcript, does NOT save to DB) ──
   const handleStop = useCallback(async () => {
     setStatus("stopping");
 
@@ -219,10 +239,8 @@ export default function DashboardPage() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
-    setStatus("saving");
-
     // Transcribe with Groq Whisper if Web Speech gave us nothing
-    let finalTranscript = transcript.trim();
+    let finalTranscript = transcriptRef.current.trim();
     if (audioBlob && !finalTranscript) {
       setStatus("transcribing");
       try {
@@ -233,6 +251,7 @@ export default function DashboardPage() {
           const { transcript: t } = await res.json();
           if (t) {
             finalTranscript = t;
+            transcriptRef.current = t;
             setTranscript(t);
           }
         }
@@ -241,7 +260,19 @@ export default function DashboardPage() {
       }
     }
 
-    setStatus("saving");
+    // Hold audio blob in memory for manual save
+    setPendingAudioBlob(audioBlob);
+    audioChunksRef.current = [];
+    setStatus("idle");
+  }, []);
+
+  // ── Save Session (manual) ───────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const finalTranscript = transcriptRef.current.trim();
+    if (!finalTranscript && !pendingAudioBlob) return;
+
+    setSaving(true);
+    setErrorMsg("");
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -251,14 +282,16 @@ export default function DashboardPage() {
       let audioFilename: string | null = null;
 
       // Upload audio blob
-      audioChunksRef.current = [];
-      if (audioBlob) {
+      if (pendingAudioBlob) {
         const filename = `${user.id}/${activeCompany.id}/${Date.now()}.webm`;
         const { error: uploadError } = await supabase.storage
           .from("audio")
-          .upload(filename, audioBlob, { contentType: "audio/webm" });
+          .upload(filename, pendingAudioBlob, { contentType: "audio/webm" });
 
-        if (!uploadError) {
+        if (uploadError) {
+          console.error("Audio upload failed:", uploadError.message);
+          setErrorMsg(`Audio upload failed: ${uploadError.message}`);
+        } else {
           const { data: urlData } = await supabase.storage
             .from("audio")
             .createSignedUrl(filename, 60 * 60 * 24 * 7);
@@ -286,14 +319,27 @@ export default function DashboardPage() {
       if (session) {
         setCurrentSession(session as ScrumSession);
         setSessionSaved(true);
+        setPendingAudioBlob(null);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save session";
       setErrorMsg(msg);
     }
+    setSaving(false);
+  }, [supabase, activeCompany, activeTemplateId, pendingAudioBlob]);
 
-    setStatus("idle");
-  }, [supabase, activeCompany, activeTemplateId, transcript]);
+  // ── Discard Recording ───────────────────────────────────────────────────
+  const handleDiscard = useCallback(() => {
+    setTranscript("");
+    transcriptRef.current = "";
+    setInterim("");
+    setPendingAudioBlob(null);
+    setCurrentSession(null);
+    setGeneratedDoc("");
+    setSessionSaved(false);
+    setErrorMsg("");
+    setGenerateError("");
+  }, []);
 
   // ── Generate SCRUM Doc ───────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
@@ -356,7 +402,8 @@ export default function DashboardPage() {
   }, [transcript, activeTemplateId, activeCompany, currentSession, supabase]);
 
   const isRecording = status === "connected";
-  const isBusy = status === "connecting" || status === "stopping" || status === "saving" || status === "transcribing";
+  const isBusy = status === "connecting" || status === "stopping" || status === "transcribing";
+  const hasUnsavedRecording = !!(transcript.trim() || pendingAudioBlob) && !sessionSaved;
 
   const wordCount = transcript.trim()
     ? transcript.trim().split(/\s+/).length
@@ -365,7 +412,7 @@ export default function DashboardPage() {
   const activeTemplate = templates.find((t) => t.id === activeTemplateId) as Template | undefined;
 
   return (
-    <div className="flex flex-col flex-1 h-full px-5 py-4 min-h-0">
+    <div className="flex flex-col flex-1 h-full px-6 py-4 min-h-0">
 
       {/* ── Session context bar ── */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -398,7 +445,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!activeCompany && (
+        {!loading && !activeCompany && (
           <span className="text-xs t-warning">
             No company yet.{" "}
             <a href="/settings" className="underline t-accent-text">Create one →</a>
@@ -407,10 +454,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Main panels ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 overflow-hidden">
 
         {/* Left: Transcript */}
-        <div className="t-card border t-border rounded-xl overflow-hidden t-shadow flex flex-col min-h-0">
+        <div className="t-card border t-border rounded-xl overflow-hidden t-shadow flex flex-col min-h-0 h-full">
           {/* Panel header */}
           <div className="flex items-center justify-between px-5 py-3 border-b t-border">
             <div className="flex items-center gap-3">
@@ -427,23 +474,22 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-
               {wordCount > 0 && (
                 <span className="font-mono text-[10px] t-faint">{wordCount} words</span>
               )}
-              {transcript && (
+              {hasUnsavedRecording && !isRecording && (
                 <button
-                  onClick={() => { setTranscript(""); setInterim(""); }}
+                  onClick={handleDiscard}
                   className="text-xs t-faint hover:t-error transition-colors"
                 >
-                  Clear
+                  Discard
                 </button>
               )}
             </div>
           </div>
 
           {/* Transcript text */}
-          <div className="h-72 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5 min-h-0">
             {errorMsg && (
               <div className="rounded-lg border border-[var(--t-error)]/30 t-error-bg px-3 py-2 mb-3">
                 <p className="text-xs t-error">{errorMsg}</p>
@@ -484,7 +530,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Right: SCRUM Document */}
-        <div className="t-card border t-border rounded-xl overflow-hidden t-shadow">
+        <div className="t-card border t-border rounded-xl overflow-hidden t-shadow flex flex-col min-h-0 h-full">
           {/* Panel header */}
           <div className="flex items-center justify-between px-5 py-3 border-b t-border">
             <span className="text-sm font-semibold t-text">SCRUM Document</span>
@@ -499,26 +545,24 @@ export default function DashboardPage() {
           </div>
 
           {/* Document area */}
-          <div className="h-72 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5 min-h-0">
             {generatedDoc ? (
-              <pre className="font-mono text-xs t-text leading-relaxed whitespace-pre-wrap">
-                {generatedDoc}
-              </pre>
+              <pre className="font-mono text-xs t-text leading-relaxed whitespace-pre-wrap">{generatedDoc}</pre>
             ) : (
               <div className="h-full flex flex-col items-center justify-center gap-4">
                 <div className="text-center space-y-1">
                   <p className="text-sm t-muted">
                     {transcript
-                      ? "Transcript ready — generate your document below"
+                      ? (sessionSaved || currentSession
+                        ? "Transcript ready — generate your document below"
+                        : "Save your session first, then generate")
                       : "Record your standup first, then generate the SCRUM document"}
                   </p>
                 </div>
                 {activeTemplate && (
                   <div className="border t-border t-input rounded-lg p-3 w-full max-h-28 overflow-hidden relative">
                     <p className="font-mono text-[10px] t-faint mb-1">Template preview</p>
-                    <pre className="font-mono text-[10px] t-muted whitespace-pre-wrap leading-relaxed line-clamp-4">
-                      {activeTemplate.content.slice(0, 180)}...
-                    </pre>
+                    <pre className="font-mono text-[10px] t-muted whitespace-pre-wrap leading-relaxed line-clamp-4">{activeTemplate.content.slice(0, 180)}...</pre>
                     <div
                       className="absolute bottom-0 left-0 right-0 h-8"
                       style={{ background: "linear-gradient(to top, var(--t-input), transparent)" }}
@@ -529,18 +573,39 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Generate controls */}
+          {/* Controls */}
           <div className="border-t t-border px-5 py-4 flex items-center gap-3 flex-wrap">
             {generateError && (
               <p className="text-xs t-error w-full">{generateError}</p>
             )}
+
+            {hasUnsavedRecording && !isRecording && (
+              <>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="text-sm font-medium px-5 py-2 rounded-lg border-2 border-[var(--t-accent)] t-accent-text
+                             hover:opacity-90 disabled:opacity-40 transition-all"
+                >
+                  {saving ? "Saving..." : "Save Session"}
+                </button>
+                <button
+                  onClick={handleDiscard}
+                  className="text-sm font-medium px-5 py-2 rounded-lg border t-border t-muted
+                             hover:t-error hover:border-[var(--t-error)] transition-all"
+                >
+                  Redo
+                </button>
+              </>
+            )}
+
             {sessionSaved && !generatedDoc && (
-              <span className="text-xs t-success font-medium">✓ Session saved</span>
+              <span className="text-xs t-success font-medium">Session saved</span>
             )}
 
             <button
               onClick={handleGenerate}
-              disabled={generating || !transcript.trim()}
+              disabled={generating || !transcript.trim() || (!sessionSaved && !currentSession)}
               className="text-sm font-medium px-5 py-2 rounded-lg t-accent
                          hover:opacity-90 disabled:opacity-30 transition-all"
             >
@@ -561,7 +626,7 @@ export default function DashboardPage() {
       </div>
 
       {/* No company nudge */}
-      {!activeCompany && (
+      {!loading && !activeCompany && (
         <div className="mt-5 t-warn-bg border border-[var(--t-warning)]/30 rounded-xl px-4 py-3">
           <p className="text-sm t-warning">
             No company profile yet. Go to{" "}

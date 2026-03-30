@@ -26,13 +26,20 @@ export async function POST(req: NextRequest) {
     (session.companies as { name: string } | null)?.name ?? undefined;
 
   if (format === "audio") {
-    if (!session.audio_filename) {
-      return NextResponse.json({ error: "No audio file for this session" }, { status: 404 });
+    if (session.audio_filename) {
+      const { data } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(session.audio_filename, 300);
+      return NextResponse.json({ url: data?.signedUrl }, {
+        headers: { "Cache-Control": "no-store" },
+      });
     }
-    const { data } = await supabase.storage
-      .from("audio")
-      .createSignedUrl(session.audio_filename, 300); // 5 min download link
-    return NextResponse.json({ url: data?.signedUrl });
+    if (session.audio_url) {
+      return NextResponse.json({ url: session.audio_url }, {
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    return NextResponse.json({ error: "No audio file for this session" }, { status: 404 });
   }
 
   const content =

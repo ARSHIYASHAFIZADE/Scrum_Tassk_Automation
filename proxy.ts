@@ -23,10 +23,11 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Refresh session — required for @supabase/ssr
+  // Use getSession() for fast JWT-based check (no DB roundtrip).
+  // API routes still use getUser() for full verification where needed.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   const { pathname } = request.nextUrl;
 
@@ -39,11 +40,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/settings") ||
     pathname.startsWith("/onboarding");
 
-  if (!user && isAppRoute) {
+  if (!session && isAppRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (user && isAuthRoute) {
+  if (session && isAuthRoute) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

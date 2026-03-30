@@ -22,7 +22,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 const STORAGE_KEY = "ashxcribe-theme";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("obsidian");
+  const [theme, setThemeState] = useState<Theme>("sage");
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;

@@ -37,4 +37,5 @@ export interface AppContextType {
   setActiveCompany: (company: Company) => void;
   templates: Template[];
   refreshCompanies: () => Promise<void>;
+  loading: boolean;
 }

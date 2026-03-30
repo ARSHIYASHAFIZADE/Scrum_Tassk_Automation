@@ -8,7 +8,9 @@ interface WaveformProps {
   active: boolean;
 }
 
-export default function Waveform({ active }: WaveformProps) {
+import { memo } from "react";
+
+export default memo(function Waveform({ active }: WaveformProps) {
   return (
     <div className="flex items-center gap-[3px] h-12">
       {BAR_HEIGHTS.map((maxH, i) => (
@@ -31,4 +33,4 @@ export default function Waveform({ active }: WaveformProps) {
       ))}
     </div>
   );
-}
+})

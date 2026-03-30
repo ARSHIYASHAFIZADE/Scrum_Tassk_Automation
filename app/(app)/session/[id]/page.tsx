@@ -35,7 +35,7 @@ export default async function SessionPage({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="flex-1 px-6 py-6 max-w-6xl">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
@@ -75,30 +75,41 @@ export default async function SessionPage({
           </div>
         )}
 
-        {/* Document */}
-        <div>
-          <p className="text-xs font-medium t-muted mb-2 uppercase tracking-wide">
-            {session.generated_document ? "SCRUM Document" : "Transcript"}
-          </p>
-          <div className="t-card border t-border rounded-xl p-5">
-            <pre className="font-mono text-sm t-text leading-relaxed whitespace-pre-wrap overflow-x-auto">
-              {session.generated_document ?? session.transcript ?? "No content available."}
-            </pre>
-          </div>
-        </div>
+        {/* Transcript */}
+        {(session.transcript || session.generated_document) ? (
+          <>
+            {session.transcript && (
+              <div>
+                <p className="text-xs font-medium t-muted mb-2 uppercase tracking-wide">
+                  Transcript
+                </p>
+                <div className="t-card border t-border rounded-xl p-5">
+                  <pre className="font-mono text-sm t-text leading-relaxed whitespace-pre-wrap overflow-x-auto">{session.transcript}</pre>
+                </div>
+              </div>
+            )}
 
-        {/* Raw transcript (if different from doc) */}
-        {session.generated_document && session.transcript && (
-          <details className="group">
-            <summary className="text-xs t-muted hover:t-text cursor-pointer transition-colors select-none">
-              Raw transcript ▾
-            </summary>
-            <div className="t-input border t-border rounded-xl p-4 mt-2">
-              <pre className="font-mono text-xs t-muted leading-relaxed whitespace-pre-wrap overflow-x-auto">
-                {session.transcript}
-              </pre>
+            {/* SCRUM Document */}
+            {session.generated_document && (
+              <div>
+                <p className="text-xs font-medium t-muted mb-2 uppercase tracking-wide">
+                  SCRUM Document
+                </p>
+                <div className="t-card border t-border rounded-xl p-5">
+                  <pre className="font-mono text-sm t-text leading-relaxed whitespace-pre-wrap overflow-x-auto">{session.generated_document}</pre>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div>
+            <p className="text-xs font-medium t-muted mb-2 uppercase tracking-wide">
+              Content
+            </p>
+            <div className="t-card border t-border rounded-xl p-5">
+              <p className="text-sm t-faint">No transcript or document available for this session.</p>
             </div>
-          </details>
+          </div>
         )}
 
         <div className="h-px t-border border-t" />
@@ -108,8 +119,8 @@ export default async function SessionPage({
           <p className="text-xs font-medium t-muted mb-3 uppercase tracking-wide">Export</p>
           <ExportMenu
             sessionId={session.id}
-            hasAudio={!!session.audio_filename}
-            hasDocument={!!(session.generated_document ?? session.transcript)}
+            hasAudio={!!(session.audio_filename || session.audio_url)}
+            hasDocument={!!(session.generated_document || session.transcript)}
           />
         </div>
       </div>

@@ -30,5 +30,7 @@ export async function POST() {
 
   const token = await at.toJwt();
 
-  return NextResponse.json({ token, url: livekitUrl });
+  return NextResponse.json({ token, url: livekitUrl }, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

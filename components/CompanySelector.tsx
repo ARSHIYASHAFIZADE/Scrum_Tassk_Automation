@@ -1,8 +1,9 @@
 "use client";
 
+import { memo } from "react";
 import { useApp } from "@/context/AppContext";
 
-export default function CompanySelector() {
+export default memo(function CompanySelector() {
   const { companies, activeCompany, setActiveCompany } = useApp();
 
   if (companies.length === 0) return null;
@@ -34,4 +35,4 @@ export default function CompanySelector() {
       </span>
     </div>
   );
-}
+})

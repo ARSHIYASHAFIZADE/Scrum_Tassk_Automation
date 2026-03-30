@@ -32,7 +32,9 @@ const SpinnerIcon = () => (
   </svg>
 );
 
-export default function MicButton({ status, onClick }: MicButtonProps) {
+import { memo } from "react";
+
+export default memo(function MicButton({ status, onClick }: MicButtonProps) {
   const isActive = status === "active";
   const isBusy   = status === "busy";
   const isError  = status === "error";
@@ -84,4 +86,4 @@ export default function MicButton({ status, onClick }: MicButtonProps) {
       </button>
     </div>
   );
-}
+})

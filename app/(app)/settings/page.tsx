@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useApp } from "@/context/AppContext";
 import type { Company, Template } from "@/lib/types";
@@ -46,8 +46,9 @@ Sprint Week: [Week Number]
    Reference Docs: [Links to Jira, GitHub, or internal Wiki]`;
 
 export default function SettingsPage() {
-  const supabase = createClient();
-  const { companies, activeCompany, setActiveCompany, templates, refreshCompanies } = useApp();
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+  const { companies, activeCompany, setActiveCompany, templates, refreshCompanies, loading } = useApp();
 
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanyColor, setNewCompanyColor] = useState(ACCENT_COLORS[0]);
@@ -58,8 +59,9 @@ export default function SettingsPage() {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
 
-  const [newTemplateName, setNewTemplateName] = useState("Daily Scrum");
-  const [newTemplateContent, setNewTemplateContent] = useState(DEFAULT_TEMPLATE);
+  const [showNewTemplate, setShowNewTemplate] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateContent, setNewTemplateContent] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateError, setTemplateError] = useState("");
   const [templateSuccess, setTemplateSuccess] = useState("");
@@ -126,15 +128,16 @@ export default function SettingsPage() {
     const { error } = await supabase.from("templates").insert({
       company_id: activeCompany.id,
       user_id: user.id,
-      name: newTemplateName.trim() || "Daily Scrum",
+      name: newTemplateName.trim() || "Untitled Template",
       content: newTemplateContent.trim(),
       is_default: templates.length === 0,
     });
     if (error) { setTemplateError(error.message); }
     else {
-      setTemplateSuccess("Template saved.");
-      setNewTemplateName("Daily Scrum");
-      setNewTemplateContent(DEFAULT_TEMPLATE);
+      setTemplateSuccess("Template created!");
+      setNewTemplateName("");
+      setNewTemplateContent("");
+      setShowNewTemplate(false);
       if (activeCompany) setActiveCompany({ ...activeCompany });
     }
     setTemplateLoading(false);
@@ -173,7 +176,7 @@ export default function SettingsPage() {
                     focus:outline-none focus:border-[var(--t-accent)] transition-colors`;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+    <div className="flex-1 px-6 py-6 space-y-8 max-w-5xl">
       <div>
         <h1 className="text-xl font-bold t-text">Settings</h1>
         <p className="text-sm t-muted mt-1">Manage your companies and SCRUM templates</p>
@@ -283,45 +286,174 @@ export default function SettingsPage() {
 
       {/* ── Templates ── */}
       <section className="t-card border t-border rounded-2xl overflow-hidden t-shadow">
-        <div className="px-6 py-4 border-b t-border">
-          <h2 className="font-semibold t-text">Templates</h2>
-          <p className="text-xs t-muted mt-0.5">
-            For:{" "}
-            <span className="t-accent-text font-medium">
-              {activeCompany?.name ?? "select a company in the navbar"}
-            </span>
-          </p>
+        <div className="px-6 py-4 border-b t-border flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold t-text">SCRUM Templates</h2>
+            <p className="text-xs t-muted mt-0.5">
+              {activeCompany
+                ? <>Templates for <span className="t-accent-text font-medium">{activeCompany.name}</span></>
+                : "Select a company first to manage its templates"}
+            </p>
+          </div>
+          {activeCompany && !showNewTemplate && (
+            <button
+              onClick={() => setShowNewTemplate(true)}
+              className="text-sm font-medium t-accent px-4 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1.5"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Template
+            </button>
+          )}
         </div>
 
-        {!activeCompany && (
-          <div className="px-6 py-4">
-            <p className="text-sm t-warning">Select a company from the navbar to manage templates.</p>
+        {templateSuccess && (
+          <div className="px-6 py-3 border-b t-border bg-[var(--t-success)]/10">
+            <p className="text-xs t-success font-medium">{templateSuccess}</p>
+          </div>
+        )}
+
+        {!loading && !activeCompany && (
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm t-muted">Create a company above, then come back here to set up templates.</p>
           </div>
         )}
 
         {activeCompany && (
           <>
-            {templates.length > 0 && (
+            {/* ── New template form ── */}
+            {showNewTemplate && (
+              <div className="px-6 py-5 border-b t-border">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold t-text">Create a new template</h3>
+                  <button onClick={() => { setShowNewTemplate(false); setNewTemplateName(""); setNewTemplateContent(""); setTemplateError(""); }}
+                    className="text-xs t-muted hover:t-text transition-colors">
+                    Cancel
+                  </button>
+                </div>
+
+                {/* Quick-start hint */}
+                <div className="t-input border t-border rounded-lg px-4 py-3 mb-4">
+                  <p className="text-xs t-muted leading-relaxed">
+                    <span className="font-semibold t-text">How templates work:</span>{" "}
+                    Write your SCRUM format and use <span className="font-mono t-accent-text">[square brackets]</span> for
+                    fields the AI should fill in from your transcript.
+                    For example: <span className="font-mono t-faint">[Key achievement 1]</span>,{" "}
+                    <span className="font-mono t-faint">[Blocker description]</span>
+                  </p>
+                </div>
+
+                <form onSubmit={handleAddTemplate} className="space-y-4">
+                  {/* Step 1: Name */}
+                  <div>
+                    <label className="block text-xs font-medium t-text mb-1.5">
+                      Template name
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      placeholder='e.g. "Daily Standup", "Sprint Review", "Weekly Sync"'
+                      className={inputCls}
+                    />
+                  </div>
+
+                  {/* Step 2: Start from scratch or use starter */}
+                  {!newTemplateContent && (
+                    <div>
+                      <label className="block text-xs font-medium t-text mb-2">
+                        Start with
+                      </label>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateContent(DEFAULT_TEMPLATE)}
+                          className="flex-1 text-left t-input border t-border rounded-lg px-4 py-3 hover:border-[var(--t-accent)] transition-colors group"
+                        >
+                          <span className="text-sm font-medium t-text group-hover:t-accent-text transition-colors">Default SCRUM template</span>
+                          <span className="block text-xs t-faint mt-0.5">Pre-built daily standup format with all standard sections</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateContent(" ")}
+                          className="flex-1 text-left t-input border t-border rounded-lg px-4 py-3 hover:border-[var(--t-accent)] transition-colors group"
+                        >
+                          <span className="text-sm font-medium t-text group-hover:t-accent-text transition-colors">Blank template</span>
+                          <span className="block text-xs t-faint mt-0.5">Start from scratch with your own format</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: Edit content */}
+                  {newTemplateContent && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-medium t-text">
+                          Template content
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateContent("")}
+                          className="text-[10px] t-faint hover:t-text transition-colors"
+                        >
+                          Change starter
+                        </button>
+                      </div>
+                      <textarea
+                        value={newTemplateContent.trim() ? newTemplateContent : ""}
+                        onChange={(e) => setNewTemplateContent(e.target.value)}
+                        rows={14}
+                        placeholder={"Paste or write your template here...\n\nUse [square brackets] for fields the AI should fill in.\nExample:\n\nDate: [YYYY-MM-DD]\nWhat I did yesterday: [Summary of yesterday's work]\nWhat I'm doing today: [Today's plan]\nBlockers: [Any blockers or issues]"}
+                        className={`${inputCls} resize-y font-mono text-xs leading-relaxed`}
+                      />
+                    </div>
+                  )}
+
+                  {templateError && <p className="text-xs t-error">{templateError}</p>}
+
+                  {newTemplateContent.trim() && (
+                    <div className="flex items-center gap-3">
+                      <button type="submit" disabled={templateLoading || !newTemplateContent.trim()}
+                        className="text-sm font-medium t-accent px-5 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-30 transition-all">
+                        {templateLoading ? "Creating..." : "Create Template"}
+                      </button>
+                      <span className="text-[10px] t-faint">
+                        {templates.length === 0 ? "This will be set as default" : ""}
+                      </span>
+                    </div>
+                  )}
+                </form>
+              </div>
+            )}
+
+            {/* ── Existing templates ── */}
+            {templates.length > 0 ? (
               <div className="t-divide divide-y">
                 {templates.map((template) => (
                   <div key={template.id}>
                     {editingTemplate?.id === template.id ? (
                       <form onSubmit={handleUpdateTemplate} className="p-6 space-y-3">
-                        <input
-                          value={editingTemplate.name}
-                          onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
-                          className={inputCls}
-                        />
-                        <textarea
-                          value={editingTemplate.content}
-                          onChange={(e) => setEditingTemplate({ ...editingTemplate, content: e.target.value })}
-                          rows={15}
-                          className={`${inputCls} resize-none font-mono text-xs leading-relaxed`}
-                        />
+                        <div>
+                          <label className="block text-xs font-medium t-text mb-1.5">Template name</label>
+                          <input
+                            value={editingTemplate.name}
+                            onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium t-text mb-1.5">Content</label>
+                          <textarea
+                            value={editingTemplate.content}
+                            onChange={(e) => setEditingTemplate({ ...editingTemplate, content: e.target.value })}
+                            rows={15}
+                            className={`${inputCls} resize-y font-mono text-xs leading-relaxed`}
+                          />
+                        </div>
                         <div className="flex gap-2">
                           <button type="submit" disabled={templateLoading}
                             className="text-sm font-medium t-accent px-4 py-2 rounded-lg hover:opacity-90">
-                            Save
+                            Save Changes
                           </button>
                           <button type="button" onClick={() => setEditingTemplate(null)}
                             className="text-sm t-muted border t-border px-4 py-2 rounded-lg hover:t-text">
@@ -334,13 +466,15 @@ export default function SettingsPage() {
                         <div className="flex items-center gap-3 mb-2">
                           <span className="text-sm font-medium t-text flex-1">{template.name}</span>
                           {template.is_default && (
-                            <span className="font-mono text-[10px] t-accent px-2 py-0.5 rounded-full">default</span>
+                            <span className="font-mono text-[10px] t-success font-medium px-2 py-0.5 rounded-full border border-[var(--t-success)]/30">
+                              default
+                            </span>
                           )}
                           <div className="flex gap-1">
                             {!template.is_default && (
                               <button onClick={() => handleSetDefault(template.id)}
                                 className="text-xs t-faint hover:t-accent-text px-2 py-1 rounded transition-colors">
-                                Set default
+                                Set as default
                               </button>
                             )}
                             <button onClick={() => setEditingTemplate(template)}
@@ -354,43 +488,25 @@ export default function SettingsPage() {
                           </div>
                         </div>
                         <pre className="font-mono text-[10px] t-faint whitespace-pre-wrap leading-relaxed line-clamp-3 overflow-hidden">
-                          {template.content.slice(0, 150)}...
+                          {template.content.slice(0, 200)}...
                         </pre>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-            )}
-
-            {/* Add template */}
-            <form onSubmit={handleAddTemplate} className="px-6 py-5 border-t t-border space-y-4">
-              <p className="text-xs font-medium t-muted uppercase tracking-wide">Add template</p>
-              <div>
-                <label className="block text-xs t-muted mb-1.5">Template name</label>
-                <input
-                  type="text"
-                  value={newTemplateName}
-                  onChange={(e) => setNewTemplateName(e.target.value)}
-                  className={inputCls}
-                />
+            ) : !showNewTemplate ? (
+              <div className="px-6 py-10 text-center">
+                <p className="text-sm t-muted mb-1">No templates yet for {activeCompany.name}</p>
+                <p className="text-xs t-faint mb-4">Templates define the format the AI uses to generate your SCRUM documents from transcripts.</p>
+                <button
+                  onClick={() => setShowNewTemplate(true)}
+                  className="text-sm font-medium t-accent px-5 py-2.5 rounded-lg hover:opacity-90 transition-all"
+                >
+                  Create Your First Template
+                </button>
               </div>
-              <div>
-                <label className="block text-xs t-muted mb-1.5">Content</label>
-                <textarea
-                  value={newTemplateContent}
-                  onChange={(e) => setNewTemplateContent(e.target.value)}
-                  rows={16}
-                  className={`${inputCls} resize-none font-mono text-xs leading-relaxed`}
-                />
-              </div>
-              {templateError && <p className="text-xs t-error">{templateError}</p>}
-              {templateSuccess && <p className="text-xs t-success">✓ {templateSuccess}</p>}
-              <button type="submit" disabled={templateLoading || !newTemplateContent.trim()}
-                className="text-sm font-medium t-accent px-5 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-30 transition-all">
-                {templateLoading ? "Saving..." : "Save template"}
-              </button>
-            </form>
+            ) : null}
           </>
         )}
       </section>

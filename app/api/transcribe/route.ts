@@ -20,5 +20,7 @@ export async function POST(req: NextRequest) {
     language: "en",
   });
 
-  return NextResponse.json({ transcript: transcription });
+  return NextResponse.json({ transcript: transcription }, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

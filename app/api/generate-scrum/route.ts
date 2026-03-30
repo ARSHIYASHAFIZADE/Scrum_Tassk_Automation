@@ -71,5 +71,7 @@ Rules:
       .eq("user_id", user.id);
   }
 
-  return NextResponse.json({ document });
+  return NextResponse.json({ document }, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

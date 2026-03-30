@@ -36,7 +36,7 @@ export default function ThemeSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 t-card border t-border rounded-xl
+        <div className="absolute left-0 bottom-full mb-2 z-50 t-card border t-border rounded-xl
                         t-shadow p-2 min-w-[140px]">
           <p className="font-mono text-[9px] t-faint uppercase tracking-widest px-2 pb-2">Theme</p>
           {THEMES.map((t) => (
