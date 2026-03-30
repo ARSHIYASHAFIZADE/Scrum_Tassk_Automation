@@ -25,21 +25,15 @@ Built with Next.js 16, React 19, Supabase, and Groq AI.
 
 Authentication pages powered by Supabase Auth. Email/password login with automatic redirect to dashboard on success.
 
-![Login Page](public/screenshots/login.png)
+![Login Page](./public/screenshots/login.png)
 
-![Signup Page](public/screenshots/signup.png)
+![Signup Page](./public/screenshots/signup.png)
 
 ---
 
 ### Onboarding
 
 A 3-step setup wizard that guides new users through creating their first company, choosing a SCRUM template, and a quick feature tour.
-
-![Onboarding - Company Setup](public/screenshots/onboarding-company.png)
-
-![Onboarding - Template Selection](public/screenshots/onboarding-template.png)
-
-![Onboarding - Guide](public/screenshots/onboarding-guide.png)
 
 ---
 
@@ -56,13 +50,13 @@ The main workspace. Two-panel layout: transcript on the left, SCRUM document on 
 6. Click **Generate SCRUM Doc** to produce the AI-filled document
 7. Copy the document or navigate to the full session view
 
-![Dashboard - Idle](public/screenshots/dashboard-idle.png)
+![Dashboard - Idle](./public/screenshots/dashboard-idle.png)
 
-![Dashboard - Recording](public/screenshots/dashboard-recording.png)
+![Dashboard - Recording](./public/screenshots/dashboard-recording.png)
 
-![Dashboard - Transcript Ready](public/screenshots/dashboard-transcript.png)
+![Dashboard - Transcript Ready](./public/screenshots/dashboard-transcript.png)
 
-![Dashboard - Generated Document](public/screenshots/dashboard-generated.png)
+![Dashboard - Generated Document](./public/screenshots/dashboard-generated.png)
 
 ---
 
@@ -79,9 +73,9 @@ Monthly calendar view filtered by the active company. Each day with sessions sho
 - Status badges (AUDIO, DOC)
 - Actions: Open, Generate Doc, Export (PDF/DOCX/Audio), Delete
 
-![Calendar View](public/screenshots/calendar.png)
+![Calendar View](./public/screenshots/calendar.png)
 
-![Calendar - Multi-Session Modal](public/screenshots/calendar-modal.png)
+![Calendar - Multi-Session Modal](./public/screenshots/calendar-modal.png)
 
 ---
 
@@ -94,9 +88,9 @@ Full view of a recorded session with:
 - **Audio Player** --- Play back the recording with scrub/seek support
 - **Export** --- Download as PDF, DOCX, or audio file
 
-![Session Detail](public/screenshots/session-detail.png)
+![Session Detail](./public/screenshots/session-detail.png)
 
-![Session - Audio Player](public/screenshots/session-audio.png)
+![Session - Audio Player](./public/screenshots/session-audio.png)
 
 ---
 
@@ -113,11 +107,11 @@ Manage companies and templates.
 - Edit template content with `[placeholder]` fields the AI fills from transcripts
 - Set a default template per company
 
-![Settings - Companies](public/screenshots/settings-companies.png)
+![Settings - Companies](./public/screenshots/settings-companies.png)
 
-![Settings - Templates](public/screenshots/settings-templates.png)
+![Settings - Templates](./public/screenshots/settings-templates.png)
 
-![Settings - New Template](public/screenshots/settings-new-template.png)
+![Settings - New Template](./public/screenshots/settings-new-template.png)
 
 ---
 
@@ -130,9 +124,9 @@ Collapsible sidebar with:
 - Help/guide panel
 - User email and logout
 
-![Sidebar Expanded](public/screenshots/sidebar-expanded.png)
+![Sidebar Expanded](./public/screenshots/sidebar-expanded.png)
 
-![Sidebar Collapsed](public/screenshots/sidebar-collapsed.png)
+![Sidebar Collapsed](./public/screenshots/sidebar-collapsed.png)
 
 ---
 
@@ -149,11 +143,11 @@ Six built-in themes. Switch instantly from the sidebar.
 | **Cream** | Warm butter/parchment + terracotta |
 | **Sage** | Light muted green + deep forest |
 
-![Theme - Obsidian](public/screenshots/theme-obsidian.png)
+![Theme - Obsidian](./public/screenshots/theme-obsidian.png)
 
-![Theme - Sage](public/screenshots/theme-sage.png)
+![Theme - Sage](./public/screenshots/theme-sage.png)
 
-![Theme - Midnight](public/screenshots/theme-midnight.png)
+![Theme - Midnight](./public/screenshots/theme-midnight.png)
 
 ---
 
@@ -292,7 +286,7 @@ proxy.ts           Auth middleware (Next.js 16 proxy)
 To add screenshots to this README:
 
 1. Take screenshots of each page/interaction listed above
-2. Save them as `.png` files in `public/screenshots/`
+2. Save them as `.png` files in `./public/screenshots/`
 3. Name them to match the paths referenced in the image tags (e.g. `login.png`, `dashboard-idle.png`, etc.)
 
 ---
