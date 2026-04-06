@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -12,15 +13,42 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cfToken, setCfToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance>(undefined);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!cfToken) {
+      setError("Please wait for the security check to complete.");
+      return;
+    }
+
     setLoading(true);
     setError("");
+
+    // Verify the Turnstile token server-side
+    const verify = await fetch("/api/verify-turnstile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: cfToken }),
+    });
+    const { success } = await verify.json();
+
+    if (!success) {
+      setError("Security check failed. Please try again.");
+      setLoading(false);
+      turnstileRef.current?.reset();
+      setCfToken(null);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
       setLoading(false);
+      turnstileRef.current?.reset();
+      setCfToken(null);
       return;
     }
     router.push("/dashboard");
@@ -72,6 +100,19 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* Cloudflare Turnstile widget */}
+            <Turnstile
+              ref={turnstileRef}
+              siteKey={process.env.NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY!}
+              onSuccess={(token) => setCfToken(token)}
+              onExpire={() => setCfToken(null)}
+              onError={() => {
+                setCfToken(null);
+                setError("Security check failed. Please refresh the page.");
+              }}
+              options={{ theme: "auto" }}
+            />
+
             {error && (
               <div className="t-error-bg border border-[var(--t-error)]/30 rounded-lg px-3 py-2">
                 <p className="text-xs t-error">{error}</p>
@@ -80,7 +121,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !cfToken}
               className="w-full t-accent hover:opacity-90 disabled:opacity-40
                          text-sm font-semibold py-2.5 rounded-lg transition-all"
             >
