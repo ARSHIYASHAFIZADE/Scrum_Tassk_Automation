@@ -1,5 +1,5 @@
 # Ashxcribe
-
+Live on: https://scrum-tassk-automation-6m4he0rne-arshiyashafizades-projects.vercel.app
 A multi-tenant SCRUM daily standup platform that records your standups, transcribes them in real-time using Web Speech API and Groq Whisper, generates AI-powered SCRUM documents, and lets you export everything as PDF, DOCX, or audio.
 
 Built with Next.js 16, React 19, Supabase, and Groq AI.
@@ -278,16 +278,6 @@ lib/
   types.ts         Shared TypeScript interfaces
 proxy.ts           Auth middleware (Next.js 16 proxy)
 ```
-
----
-
-## Adding Screenshots
-
-To add screenshots to this README:
-
-1. Take screenshots of each page/interaction listed above
-2. Save them as `.png` files in `./public/screenshots/`
-3. Name them to match the paths referenced in the image tags (e.g. `login.png`, `dashboard-idle.png`, etc.)
 
 ---
 
