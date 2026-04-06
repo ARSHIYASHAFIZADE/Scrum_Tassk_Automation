@@ -1,5 +1,6 @@
 # Ashxcribe
-Live on: https://scrum-tassk-automation-6m4he0rne-arshiyashafizades-projects.vercel.app
+
+Live on: https://scrum-tassk-automation.vercel.app
 
 A multi-tenant SCRUM daily standup platform that records your standups, transcribes them in real-time using Web Speech API and Groq Whisper, generates AI-powered SCRUM documents, and lets you export everything as PDF, DOCX, or audio.
 
@@ -20,11 +21,22 @@ Built with Next.js 16, React 19, Supabase, and Groq AI.
 
 ---
 
+## Security
+
+- **Cloudflare Turnstile** --- Bot protection on login and signup. Managed mode silently verifies visitors; the token is validated server-side before any auth call is made
+- **Security Headers** --- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Referrer-Policy`, and `Permissions-Policy` applied to all routes
+- **Authentication on all API routes** --- Every API endpoint verifies the Supabase session via `getUser()` and returns 401 for unauthenticated requests
+- **Input validation** --- Transcript length capped at 50,000 characters; audio uploads validated for MIME type and capped at 25 MB; export format restricted to an explicit allowlist
+- **Row Level Security** --- All Supabase queries are scoped to the authenticated user's ID; no cross-user data access is possible at the application layer
+- **Safe filename generation** --- Export filenames strip non-date characters before use in `Content-Disposition` headers
+
+---
+
 ## Pages & Functionality
 
 ### Login & Signup
 
-Authentication pages powered by Supabase Auth. Email/password login with automatic redirect to dashboard on success.
+Authentication pages powered by Supabase Auth. Email/password login and signup protected by Cloudflare Turnstile bot detection. Automatic redirect to dashboard on success.
 
 ![Login Page](./public/screenshots/login.png)
 
@@ -163,6 +175,7 @@ Six built-in themes. Switch instantly from the sidebar.
 | **AI / LLM** | Groq SDK --- Llama 3.3 70B for SCRUM generation |
 | **Transcription** | Web Speech API (live) + Groq Whisper (fallback) |
 | **Audio** | MediaRecorder API (WebM/Opus) |
+| **Bot Protection** | Cloudflare Turnstile |
 | **PDF Export** | jsPDF |
 | **DOCX Export** | docx |
 | **Fonts** | Geist Sans + Geist Mono |
@@ -176,16 +189,19 @@ Six built-in themes. Switch instantly from the sidebar.
 - Node.js 18+
 - A Supabase project with the required tables (see below)
 - A Groq API key ([console.groq.com](https://console.groq.com))
+- A Cloudflare Turnstile widget ([dash.cloudflare.com](https://dash.cloudflare.com))
 
 ### Environment Variables
 
-Create a `.env` file in the root:
+Create a `.env.local` file in the root:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GROQ_API_KEY=your-groq-key
+NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY=your-turnstile-site-key
+CF_TURNSTILE_SECRET_KEY=your-turnstile-secret-key
 LIVEKIT_API_KEY=your-livekit-key        # optional
 LIVEKIT_API_SECRET=your-livekit-secret  # optional
 LIVEKIT_URL=wss://your-livekit-url      # optional
@@ -259,7 +275,7 @@ npm start
 
 ```
 app/
-  (auth)/          Login, signup pages
+  (auth)/          Login, signup pages (Turnstile protected)
   (app)/           Protected app routes
     dashboard/     Main recording + generation UI
     calendar/      Monthly session calendar
@@ -267,10 +283,11 @@ app/
     settings/      Company & template management
     onboarding/    3-step setup wizard
   api/
-    generate-scrum/  Groq LLM SCRUM generation
-    transcribe/      Groq Whisper transcription
-    export/          PDF/DOCX/audio export
-    livekit/token/   LiveKit JWT (optional)
+    generate-scrum/   Groq LLM SCRUM generation
+    transcribe/       Groq Whisper transcription
+    export/           PDF/DOCX/audio export
+    verify-turnstile/ Cloudflare Turnstile server-side validation
+    livekit/token/    LiveKit JWT (optional)
 components/        Reusable UI components
 context/           React context providers (App, Sidebar, Theme)
 lib/
@@ -278,6 +295,7 @@ lib/
   export.ts        PDF & DOCX generation
   types.ts         Shared TypeScript interfaces
 proxy.ts           Auth middleware (Next.js 16 proxy)
+next.config.ts     Security headers configuration
 ```
 
 ---
