@@ -1,5 +1,6 @@
 # Ashxcribe
 Live on: https://scrum-tassk-automation-6m4he0rne-arshiyashafizades-projects.vercel.app
+
 A multi-tenant SCRUM daily standup platform that records your standups, transcribes them in real-time using Web Speech API and Groq Whisper, generates AI-powered SCRUM documents, and lets you export everything as PDF, DOCX, or audio.
 
 Built with Next.js 16, React 19, Supabase, and Groq AI.
